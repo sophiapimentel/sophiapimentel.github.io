@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Gerador de Folha de Ponto — PDF</title>
+
+  <!-- jsPDF + html2canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; background:#f4f6f8; padding:20px; color:#222; }
+    .controls { display:flex; gap:8px; align-items:center; margin-bottom:12px; flex-wrap:wrap; }
+    select, button { padding:6px 10px; font-size:14px; }
+    .sheet { max-width:980px; margin:0 auto; background:#fff; padding:18px; box-shadow:0 2px 8px rgba(0,0,0,0.06); }
+    .header { margin-bottom:0px; padding:6px 8px; border:1px solid #000; border-bottom:none; font-size:13px; }
+    .header .title { font-weight:700; margin-bottom:6px; border-bottom: 1px solid #000; padding-bottom:6px; }
+    .header-box { display:flex; justify-content:space-between; gap:12px; padding-bottom:20px }
+    .header-left { font-size:13px; }
+    .meta div { margin:2px 0; }
+    .header-right { text-align:right; font-size:13px; }
+    caption { caption-side:top; text-align:left; padding-bottom:6px; font-weight:600; font-size:13px;}
+    #pontoTableDiv { overflow-x:auto }
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    th, td { border:1px solid #000; padding:6px 8px; text-align:center; vertical-align:middle; }
+    th { background:#efefef; font-weight:700; }
+    .col-day { width:92px; text-align:left; padding-left:8px; }
+    .col-sign { width:200px; text-align:left; padding-left:10px; }
+    .weekend { background:#fafafa; color:#999; }
+    .notes { margin-top:10px; font-size:12px; color:#555; }
+    .signature { margin-top:60px; display:flex; justify-content:space-between; align-items:center; }
+    .sig-line { border-top:1px solid #333; width:320px; padding-top:6px; text-align:center; font-size:13px; }
+    .small { font-size:12px; color:#666; }
+  </style>
+</head>
+<body>
+  <div class="controls">
+    <label for="month">Mês:</label>
+    <select id="month"></select>
+
+    <label for="year">Ano:</label>
+    <select id="year"></select>
+
+    <button id="btnFill">Gerar</button>
+    <button id="btnPDF">Gerar PDF</button>
+
+    <div class="small" style="margin-left:auto;">Horário base: 08:00–12:00 e 13:00–17:48 (mínimo diário 8h48). Tolerância ±3 minutos.</div>
+  </div>
+
+  <div id="printArea" class="sheet" role="region" aria-label="Folha de ponto">
+    <div class="header" role="banner">
+      <div class="title">Folha de ponto individual de funcionários</div>
+      <div class="header-box">
+        <div class="header-left">
+          <div class="meta">
+            <div><strong>Empresa:</strong> INSTITUTO OTOVIDA - CLINICA DE AUDICAO V</div>
+            <div><strong>Atividade:</strong> Atividades de fonoaudiologia</div>
+            <div><strong>Endereço:</strong> AV GOVERNADOR IVO SILVEIRA</div>
+            <div><strong>Funcionário:</strong> 124 - SOPHIA PIMENTEL RODRIGUES</div>
+            <div><strong>Cargo:</strong> 010 - FONOAUDIOLOGO (A)</div>
+            <div><strong>Serviço:</strong> INSTITUTO OTOVIDA - CLINICA DE AUDICAO V</div>
+            <div><strong>Horário:</strong> Segunda à Sexta 08:00 às 12:00 e das 13:00 às 17:48</div>
+          </div>
+        </div>
+
+        <div class="header-right">
+          <div><strong>Período:</strong> <span id="periodLabel">—</span></div>
+          <div><strong>CNPJ/CPF:</strong> 04.045.814/0001-01</div>
+          <div><strong>CTPS/Série:</strong> 1750972/8754</div>
+          <div><strong>Depto:</strong> 001 - INSTITUTO OTOVIDA</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="pontoTableDiv">
+      <table id="pontoTable" aria-describedby="table-desc">
+        <!-- <caption id="table-desc">Horário normal: Segunda à Sexta 08:00 às 12:00 e 13:00 às 17:48 — mínimo diário: 8h48 (528 min). Tolerância por marcação: ±3 minutos.</caption> -->
+        <thead>
+          <tr>
+            <th class="col-day">Dias</th>
+            <th>Entrada</th>
+            <th>Saída</th>
+            <th>Entrada</th>
+            <th>Saída</th>
+            <th>Extra Início</th>
+            <th>Extra Término</th>
+            <th class="col-sign">Assinatura / observações</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- <div class="notes">
+      Observações: geração com variações humanizadas. Colunas "Extra" mantidas vazias conforme solicitado.
+    </div> -->
+
+    <div class="signature">
+      <div><strong>Data:</strong> <span id="generatedDate">—</span></div>
+      <div class="sig-line">
+        Assinatura do Funcionário
+        <!-- <br/>
+        <span style="font-size:12px;color:#666;">Assinatura do Funcionário</span> -->
+      </div>
+    </div>
+  </div>
+
+<script>
+  // utils
+  function pad(n){ return String(n).padStart(2,'0'); }
+  function toMinutes(h,m){ return h*60 + m; }
+  function fromMinutes(mins){ const h = Math.floor(mins/60); const m = Math.round(mins % 60); return pad(h) + ':' + pad(m); }
+  function rand(min,max){ return Math.floor(Math.random()*(max-min+1)) + min; }
+
+  // params
+  const baseMorningStart = toMinutes(8,0);    // 480
+  const baseMorningEnd   = toMinutes(12,0);   // 720
+  const baseAfternoonStart = toMinutes(13,0); // 780
+  const baseAfternoonEnd   = toMinutes(17,48);//1068
+  const minimoDiario = 8*60 + 48; // 528
+
+  // setup selects
+  const monthSelect = document.getElementById('month');
+  const yearSelect  = document.getElementById('year');
+  const monthNames  = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const now = new Date();
+  monthNames.forEach((m,i) => { const o = document.createElement('option'); o.value=i; o.text=m; if(i===now.getMonth()) o.selected=true; monthSelect.appendChild(o); });
+  for(let y = now.getFullYear()-2; y <= now.getFullYear()+2; y++){ const o = document.createElement('option'); o.value=y; o.text=y; if(y===now.getFullYear()) o.selected=true; yearSelect.appendChild(o); }
+
+  // lógica humanizada: pequenas variações em cada marcação, mas garantir >= minimoDiario
+  function gerarHorariosDia() {
+    // offsets individuais -3..+3
+    const dIn1 = rand(-3,3);
+    const dOut1 = rand(-3,3);
+    const dIn2 = rand(-3,3);
+    const dOut2 = rand(-3,3);
+
+    let in1 = baseMorningStart + dIn1;
+    let out1 = baseMorningEnd + dOut1;
+    let in2 = baseAfternoonStart + dIn2;
+    let out2 = baseAfternoonEnd + dOut2;
+
+    // sanity: saída manhã pelo menos 30 min após entrada
+    if (out1 <= in1 + 30) out1 = in1 + rand(45,120);
+
+    // calcula total atual
+    let total = (out1 - in1) + (out2 - in2);
+
+    // se total menor que mínimo, estende saída da tarde (humanizado)
+    if (total < minimoDiario) {
+      const falta = minimoDiario - total;
+      out2 += falta + rand(0,3); // acrescenta pequeno extra rand
+      total = (out1 - in1) + (out2 - in2);
+    } else {
+      // adiciona pequena variação positiva pra ficar mais humano (até +6 min)
+      out2 += rand(0,3);
+      total = (out1 - in1) + (out2 - in2);
+    }
+
+    // garantir consistência: out2 > in2 + 30
+    if (out2 <= in2 + 30) out2 = in2 + rand(180,300);
+
+    return {
+      in1: fromMinutes(in1),
+      out1: fromMinutes(out1),
+      in2: fromMinutes(in2),
+      out2: fromMinutes(out2),
+      totalMinutes: total
+    };
+  }
+
+  // gera a tabela do mês/ano, desabilita fins de semana
+  function generateTable(year, month) {
+    const tbody = document.querySelector('#pontoTable tbody');
+    tbody.innerHTML = '';
+    const days = new Date(year, month+1, 0).getDate();
+    for(let d=1; d<=days; d++){
+      const tr = document.createElement('tr');
+      const date = new Date(year, month, d);
+      const dow = date.getDay(); // 0..6
+      const isWeekend = (dow === 0 || dow === 6);
+      // Dia
+      const tdDay = document.createElement('td');
+      const weekdayNames = ['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
+      tdDay.className = 'col-day';
+      tdDay.textContent = pad(d) + ' ' + weekdayNames[dow];
+      tr.appendChild(tdDay);
+
+      if (isWeekend) {
+        tr.classList.add('weekend');
+        // quatro marcações vazias
+        for(let i=0;i<4;i++){ const td = document.createElement('td'); td.textContent = ''; tr.appendChild(td); }
+        // extras vazias
+        tr.appendChild(document.createElement('td'));
+        tr.appendChild(document.createElement('td'));
+        // obs (Domingo / Sábado)
+        const tdObs = document.createElement('td'); tdObs.className='col-sign'; tdObs.textContent = dow===0 ? 'Domingo' : 'Sábado'; tr.appendChild(tdObs);
+      } else {
+        const h = gerarHorariosDia();
+        const td1 = document.createElement('td'); td1.textContent = h.in1; tr.appendChild(td1);
+        const td2 = document.createElement('td'); td2.textContent = h.out1; tr.appendChild(td2);
+        const td3 = document.createElement('td'); td3.textContent = h.in2; tr.appendChild(td3);
+        const td4 = document.createElement('td'); td4.textContent = h.out2; tr.appendChild(td4);
+        // extras (vazios)
+        tr.appendChild(document.createElement('td'));
+        tr.appendChild(document.createElement('td'));
+        // assinatura
+        const tdObs = document.createElement('td'); tdObs.className='col-sign'; tdObs.textContent = ''; tr.appendChild(tdObs);
+      }
+      tbody.appendChild(tr);
+    }
+
+    // atualizar período e data gerada
+    document.getElementById('periodLabel').textContent = `01/${pad(month+1)}/${year} a ${pad(days)}/${pad(month+1)}/${year}`;
+    document.getElementById('generatedDate').textContent = `${pad(days)}/${pad(month+1)}/${year}`;
+  }
+
+  // exportar PDF da área #printArea
+  async function exportPDF() {
+    // pega a área que queremos renderizar
+    const element = document.getElementById('printArea');
+
+    // usa html2canvas para capturar; configurado com scale para qualidade
+    const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false });
+    const imgData = canvas.toDataURL('image/png');
+
+    const { jsPDF } = window.jspdf;
+    // A4 portrait em pontos (pt) = 595 x 842 (aprox)
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+
+    // calcular imagem dimension mantendo proporção
+    const imgWidth = pageWidth - 40; // margens 20pt
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    let y = 20;
+    pdf.addImage(imgData, 'PNG', 20, y, imgWidth, imgHeight);
+
+    // se a imagem exceder a página, adicionar páginas seguintes
+    if (imgHeight + 40 > pageHeight) {
+      let remainingHeight = imgHeight;
+      let sY = 0;
+      while (remainingHeight > 0) {
+        // slice por janela do canvas
+        const sliceCanvas = document.createElement('canvas');
+        const sliceCtx = sliceCanvas.getContext('2d');
+
+        // calcular a porção vertical do canvas que cabe na página
+        const pageCanvasHeight = Math.floor((pageHeight - 40) * (canvas.width / imgWidth)); // em px do canvas original
+        sliceCanvas.width = canvas.width;
+        sliceCanvas.height = Math.min(pageCanvasHeight, canvas.height - sY);
+
+        sliceCtx.drawImage(canvas, 0, sY, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
+        const sliceData = sliceCanvas.toDataURL('image/png');
+        if (sY > 0) pdf.addPage();
+        pdf.addImage(sliceData, 'PNG', 20, 20, imgWidth, (sliceCanvas.height * imgWidth) / canvas.width);
+        sY += sliceCanvas.height;
+        remainingHeight -= sliceCanvas.height;
+      }
+    }
+
+    const month = document.getElementById('month').value.padStart ? String(parseInt(document.getElementById('month').value) + 1).padStart(2,'0') : pad(parseInt(document.getElementById('month').value)+1);
+    const year = document.getElementById('year').value;
+    pdf.save(`ponto_${year}_${month}.pdf`);
+  }
+
+  // binds
+  document.getElementById('btnFill').addEventListener('click', () => {
+    const m = parseInt(monthSelect.value,10);
+    const y = parseInt(yearSelect.value,10);
+    generateTable(y, m);
+  });
+  document.getElementById('btnPDF').addEventListener('click', () => {
+    exportPDF().catch(err => { console.error(err); alert('Erro ao gerar PDF: ' + err.message); });
+  });
+
+  // init default render do mês atual
+  (function init(){
+    monthSelect.value = now.getMonth();
+    yearSelect.value = now.getFullYear();
+    generateTable(now.getFullYear(), now.getMonth());
+  })();
+</script>
+</body>
+</html>
