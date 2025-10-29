@@ -107,181 +107,113 @@
   </div>
 
 <script>
-  // utils
-  function pad(n){ return String(n).padStart(2,'0'); }
-  function toMinutes(h,m){ return h*60 + m; }
-  function fromMinutes(mins){ const h = Math.floor(mins/60); const m = Math.round(mins % 60); return pad(h) + ':' + pad(m); }
-  function rand(min,max){ return Math.floor(Math.random()*(max-min+1)) + min; }
+  // funções utilitárias
+  const pad = n => String(n).padStart(2,'0');
+  const toMin = (h,m) => h*60+m;
+  const fromMin = min => pad(Math.floor(min/60))+':'+pad(Math.round(min%60));
+  const rand = (min,max)=>Math.floor(Math.random()*(max-min+1))+min;
 
-  // params
-  const baseMorningStart = toMinutes(8,0);    // 480
-  const baseMorningEnd   = toMinutes(12,0);   // 720
-  const baseAfternoonStart = toMinutes(13,0); // 780
-  const baseAfternoonEnd   = toMinutes(17,48);//1068
-  const minimoDiario = 8*60 + 48; // 528
+  const base = {
+    e1: toMin(8,0),
+    s1: toMin(12,0),
+    e2: toMin(13,0),
+    s2: toMin(17,48)
+  };
+  const MIN_DAILY = 8*60+48; // 528min
 
-  // setup selects
-  const monthSelect = document.getElementById('month');
-  const yearSelect  = document.getElementById('year');
-  const monthNames  = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const monthSelect = document.getElementById("month");
+  const yearSelect  = document.getElementById("year");
+  const months = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"];
   const now = new Date();
-  monthNames.forEach((m,i) => { const o = document.createElement('option'); o.value=i; o.text=m; if(i===now.getMonth()) o.selected=true; monthSelect.appendChild(o); });
-  for(let y = now.getFullYear()-2; y <= now.getFullYear()+2; y++){ const o = document.createElement('option'); o.value=y; o.text=y; if(y===now.getFullYear()) o.selected=true; yearSelect.appendChild(o); }
 
-  // lógica humanizada: pequenas variações em cada marcação, mas garantir >= minimoDiario
-  function gerarHorariosDia() {
-    // offsets individuais -3..+3
-    const dIn1 = rand(-3,3);
-    const dOut1 = rand(-3,3);
-    const dIn2 = rand(-3,3);
-    const dOut2 = rand(-3,3);
-
-    let in1 = baseMorningStart + dIn1;
-    let out1 = baseMorningEnd + dOut1;
-    let in2 = baseAfternoonStart + dIn2;
-    let out2 = baseAfternoonEnd + dOut2;
-
-    // sanity: saída manhã pelo menos 30 min após entrada
-    if (out1 <= in1 + 30) out1 = in1 + rand(45,120);
-
-    // calcula total atual
-    let total = (out1 - in1) + (out2 - in2);
-
-    // se total menor que mínimo, estende saída da tarde (humanizado)
-    if (total < minimoDiario) {
-      const falta = minimoDiario - total;
-      out2 += falta + rand(0,3); // acrescenta pequeno extra rand
-      total = (out1 - in1) + (out2 - in2);
-    } else {
-      // adiciona pequena variação positiva pra ficar mais humano (até +6 min)
-      out2 += rand(0,3);
-      total = (out1 - in1) + (out2 - in2);
-    }
-
-    // garantir consistência: out2 > in2 + 30
-    if (out2 <= in2 + 30) out2 = in2 + rand(180,300);
-
-    return {
-      in1: fromMinutes(in1),
-      out1: fromMinutes(out1),
-      in2: fromMinutes(in2),
-      out2: fromMinutes(out2),
-      totalMinutes: total
-    };
+  months.forEach((m,i)=>{
+    const opt=document.createElement("option");
+    opt.value=i; opt.textContent=m;
+    if(i===now.getMonth()) opt.selected=true;
+    monthSelect.appendChild(opt);
+  });
+  for(let y=now.getFullYear()-2; y<=now.getFullYear()+2; y++){
+    const opt=document.createElement("option");
+    opt.value=y; opt.textContent=y;
+    if(y===now.getFullYear()) opt.selected=true;
+    yearSelect.appendChild(opt);
   }
 
-  // gera a tabela do mês/ano, desabilita fins de semana
-  function generateTable(year, month) {
-    const tbody = document.querySelector('#pontoTable tbody');
-    tbody.innerHTML = '';
-    const days = new Date(year, month+1, 0).getDate();
-    for(let d=1; d<=days; d++){
-      const tr = document.createElement('tr');
-      const date = new Date(year, month, d);
-      const dow = date.getDay(); // 0..6
-      const isWeekend = (dow === 0 || dow === 6);
-      // Dia
-      const tdDay = document.createElement('td');
-      const weekdayNames = ['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
-      tdDay.className = 'col-day';
-      tdDay.textContent = pad(d) + ' ' + weekdayNames[dow];
-      tr.appendChild(tdDay);
+  function gerarHorariosHumanizados(){
+    let e1 = base.e1 + rand(-3,3);
+    let s1 = base.s1 + rand(-3,3);
+    let e2 = base.e2 + rand(-3,3);
+    let s2 = base.s2 + rand(-3,3);
 
-      if (isWeekend) {
-        tr.classList.add('weekend');
-        // quatro marcações vazias
-        for(let i=0;i<4;i++){ const td = document.createElement('td'); td.textContent = ''; tr.appendChild(td); }
-        // extras vazias
-        tr.appendChild(document.createElement('td'));
-        tr.appendChild(document.createElement('td'));
-        // obs (Domingo / Sábado)
-        const tdObs = document.createElement('td'); tdObs.className='col-sign'; tdObs.textContent = dow===0 ? 'Domingo' : 'Sábado'; tr.appendChild(tdObs);
+    // garantir intervalo >= 60 min
+    if (e2 - s1 < 60) {
+      e2 = s1 + 60 + rand(0,3);
+    }
+
+    let total = (s1 - e1) + (s2 - e2);
+    if (total < MIN_DAILY) {
+      s2 += (MIN_DAILY - total) + rand(0,3);
+    }
+
+    return [fromMin(e1), fromMin(s1), fromMin(e2), fromMin(s2)];
+  }
+
+  function gerarTabela(mes,ano){
+    const tbody=document.querySelector("#pontoTable tbody");
+    tbody.innerHTML="";
+    const dias=new Date(ano,mes+1,0).getDate();
+    for(let d=1;d<=dias;d++){
+      const dt=new Date(ano,mes,d);
+      const dow=dt.getDay();
+      const tr=document.createElement("tr");
+      const dia=String(pad(d))+" "+["Dom","Seg","Ter","Qua","Qui","Sex","Sab"][dow];
+      const tdDia=document.createElement("td");
+      tdDia.textContent=dia; tdDia.className="col-day";
+      tr.appendChild(tdDia);
+
+      if(dow===0 || dow===6){
+        tr.classList.add("weekend");
+        for(let i=0;i<4;i++){ const td=document.createElement("td"); tr.appendChild(td); }
+        tr.appendChild(document.createElement("td"));
+        tr.appendChild(document.createElement("td"));
+        const tdObs=document.createElement("td");
+        tdObs.className="col-sign";
+        tdObs.textContent=(dow===0?"Domingo":"Sábado");
+        tr.appendChild(tdObs);
       } else {
-        const h = gerarHorariosDia();
-        const td1 = document.createElement('td'); td1.textContent = h.in1; tr.appendChild(td1);
-        const td2 = document.createElement('td'); td2.textContent = h.out1; tr.appendChild(td2);
-        const td3 = document.createElement('td'); td3.textContent = h.in2; tr.appendChild(td3);
-        const td4 = document.createElement('td'); td4.textContent = h.out2; tr.appendChild(td4);
-        // extras (vazios)
-        tr.appendChild(document.createElement('td'));
-        tr.appendChild(document.createElement('td'));
-        // assinatura
-        const tdObs = document.createElement('td'); tdObs.className='col-sign'; tdObs.textContent = ''; tr.appendChild(tdObs);
+        const h=gerarHorariosHumanizados();
+        h.forEach(v=>{const td=document.createElement("td");td.textContent=v;tr.appendChild(td);});
+        tr.appendChild(document.createElement("td"));
+        tr.appendChild(document.createElement("td"));
+        const tdObs=document.createElement("td");
+        tdObs.className="col-sign"; tdObs.textContent="Sophia P. Rodrigues";
+        tr.appendChild(tdObs);
       }
       tbody.appendChild(tr);
     }
-
-    // atualizar período e data gerada
-    document.getElementById('periodLabel').textContent = `01/${pad(month+1)}/${year} a ${pad(days)}/${pad(month+1)}/${year}`;
-    document.getElementById('generatedDate').textContent = `${pad(days)}/${pad(month+1)}/${year}`;
+    document.getElementById("periodLabel").textContent=`01/${pad(mes+1)}/${ano} a ${pad(dias)}/${pad(mes+1)}/${ano}`;
+    document.getElementById("generatedDate").textContent=new Date().toLocaleDateString("pt-BR");
   }
 
-  // exportar PDF da área #printArea
-  async function exportPDF() {
-    // pega a área que queremos renderizar
-    const element = document.getElementById('printArea');
-
-    // usa html2canvas para capturar; configurado com scale para qualidade
-    const canvas = await html2canvas(element, { scale: 2, useCORS: true, logging: false });
-    const imgData = canvas.toDataURL('image/png');
-
-    const { jsPDF } = window.jspdf;
-    // A4 portrait em pontos (pt) = 595 x 842 (aprox)
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
-    const pageWidth = pdf.internal.pageSize.getWidth();
-    const pageHeight = pdf.internal.pageSize.getHeight();
-
-    // calcular imagem dimension mantendo proporção
-    const imgWidth = pageWidth - 40; // margens 20pt
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
-
-    let y = 20;
-    pdf.addImage(imgData, 'PNG', 20, y, imgWidth, imgHeight);
-
-    // se a imagem exceder a página, adicionar páginas seguintes
-    if (imgHeight + 40 > pageHeight) {
-      let remainingHeight = imgHeight;
-      let sY = 0;
-      while (remainingHeight > 0) {
-        // slice por janela do canvas
-        const sliceCanvas = document.createElement('canvas');
-        const sliceCtx = sliceCanvas.getContext('2d');
-
-        // calcular a porção vertical do canvas que cabe na página
-        const pageCanvasHeight = Math.floor((pageHeight - 40) * (canvas.width / imgWidth)); // em px do canvas original
-        sliceCanvas.width = canvas.width;
-        sliceCanvas.height = Math.min(pageCanvasHeight, canvas.height - sY);
-
-        sliceCtx.drawImage(canvas, 0, sY, canvas.width, sliceCanvas.height, 0, 0, canvas.width, sliceCanvas.height);
-        const sliceData = sliceCanvas.toDataURL('image/png');
-        if (sY > 0) pdf.addPage();
-        pdf.addImage(sliceData, 'PNG', 20, 20, imgWidth, (sliceCanvas.height * imgWidth) / canvas.width);
-        sY += sliceCanvas.height;
-        remainingHeight -= sliceCanvas.height;
-      }
-    }
-
-    const month = document.getElementById('month').value.padStart ? String(parseInt(document.getElementById('month').value) + 1).padStart(2,'0') : pad(parseInt(document.getElementById('month').value)+1);
-    const year = document.getElementById('year').value;
-    pdf.save(`ponto_${year}_${month}.pdf`);
+  async function gerarPDF(){
+    const el=document.getElementById("printArea");
+    const canvas=await html2canvas(el,{scale:2});
+    const img=canvas.toDataURL("image/png");
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF({orientation:"portrait",unit:"pt",format:"a4"});
+    const pageWidth=pdf.internal.pageSize.getWidth();
+    const imgWidth=pageWidth-40;
+    const imgHeight=(canvas.height*imgWidth)/canvas.width;
+    pdf.addImage(img,"PNG",20,20,imgWidth,imgHeight);
+    pdf.save(`folha_ponto_${yearSelect.value}_${pad(+monthSelect.value+1)}.pdf`);
   }
 
-  // binds
-  document.getElementById('btnFill').addEventListener('click', () => {
-    const m = parseInt(monthSelect.value,10);
-    const y = parseInt(yearSelect.value,10);
-    generateTable(y, m);
+  document.getElementById("btnFill").addEventListener("click",()=>{
+    gerarTabela(+monthSelect.value,+yearSelect.value);
   });
-  document.getElementById('btnPDF').addEventListener('click', () => {
-    exportPDF().catch(err => { console.error(err); alert('Erro ao gerar PDF: ' + err.message); });
-  });
+  document.getElementById("btnPDF").addEventListener("click",gerarPDF);
 
-  // init default render do mês atual
-  (function init(){
-    monthSelect.value = now.getMonth();
-    yearSelect.value = now.getFullYear();
-    generateTable(now.getFullYear(), now.getMonth());
-  })();
+  gerarTabela(now.getMonth(),now.getFullYear());
 </script>
 </body>
 </html>
