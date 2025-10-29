@@ -114,7 +114,6 @@
   </div>
 
 <script>
-  // funções utilitárias
   const pad = n => String(n).padStart(2,'0');
   const toMin = (h,m) => h*60+m;
   const fromMin = min => pad(Math.floor(min/60))+':'+pad(Math.round(min%60));
@@ -127,6 +126,7 @@
     s2: toMin(17,48)
   };
   const MIN_DAILY = 8*60+48; // 528min
+  const LUNCH_BREAK = 60;    // 1h exata
 
   const monthSelect = document.getElementById("month");
   const yearSelect  = document.getElementById("year");
@@ -139,6 +139,7 @@
     if(i===now.getMonth()) opt.selected=true;
     monthSelect.appendChild(opt);
   });
+
   for(let y=now.getFullYear()-2; y<=now.getFullYear()+2; y++){
     const opt=document.createElement("option");
     opt.value=y; opt.textContent=y;
@@ -149,18 +150,15 @@
   function gerarHorariosHumanizados(){
     let e1 = base.e1 + rand(-3,3);
     let s1 = base.s1 + rand(-3,3);
-    let e2 = base.e2 + rand(-3,3);
+
+    // almoço fixo de 1h
+    let e2 = s1 + LUNCH_BREAK;
     let s2 = base.s2 + rand(-3,3);
 
-    // garantir intervalo >= 60 min
-    if (e2 - s1 < 60) {
-      e2 = s1 + 60 + rand(0,3);
-    }
-
+    // compensar jornada total
     let total = (s1 - e1) + (s2 - e2);
-    if (total < MIN_DAILY) {
-      s2 += (MIN_DAILY - total) + rand(0,3);
-    }
+    const diff = MIN_DAILY - total;
+    s2 += diff;
 
     return [fromMin(e1), fromMin(s1), fromMin(e2), fromMin(s2)];
   }
@@ -169,12 +167,14 @@
     const tbody=document.querySelector("#pontoTable tbody");
     tbody.innerHTML="";
     const dias=new Date(ano,mes+1,0).getDate();
-    for(let d=1;d<=dias;d++){
+
+    for(let d=1; d<=dias; d++){
       const dt=new Date(ano,mes,d);
       const dow=dt.getDay();
       const tr=document.createElement("tr");
       const dia=String(pad(d));
       const diaName=["Dom","Seg","Ter","Qua","Qui","Sex","Sab"][dow];
+
       const tdDia=document.createElement("td");
       const tdDiaName=document.createElement("td");
       tdDia.textContent=dia;
@@ -186,7 +186,10 @@
 
       if(dow===0 || dow===6){
         tr.classList.add("weekend");
-        for(let i=0;i<4;i++){ const td=document.createElement("td"); tr.appendChild(td); }
+        for(let i=0;i<4;i++){
+          const td=document.createElement("td");
+          tr.appendChild(td);
+        }
         tr.appendChild(document.createElement("td"));
         tr.appendChild(document.createElement("td"));
         const tdObs=document.createElement("td");
@@ -197,8 +200,9 @@
         const h=gerarHorariosHumanizados();
         h.forEach(v=>{
           const td=document.createElement("td");
-          td.textContent=v;tr.appendChild(td);
+          td.textContent=v;
           td.className="col-hour";
+          tr.appendChild(td);
         });
         const tdEI=document.createElement("td");
         tdEI.className="col-hour";
@@ -207,35 +211,38 @@
         tr.appendChild(tdEI);
         tr.appendChild(tdEF);
         const tdObs=document.createElement("td");
-        // tdObs.className="col-sign";
         tdObs.textContent="";
         tr.appendChild(tdObs);
       }
+
       tbody.appendChild(tr);
     }
-    document.getElementById("periodLabel").textContent=`01/${pad(mes+1)}/${ano} a ${pad(dias)}/${pad(mes+1)}/${ano}`;
-    document.getElementById("generatedDate").textContent= `${pad(dias)}/${pad(mes+1)}/${ano}`;
+
+    document.getElementById("periodLabel").textContent = `01/${pad(mes+1)}/${ano} a ${pad(dias)}/${pad(mes+1)}/${ano}`;
+    document.getElementById("generatedDate").textContent = `${pad(dias)}/${pad(mes+1)}/${ano}`;
   }
 
   async function gerarPDF(){
-    const el=document.getElementById("printArea");
-    const canvas=await html2canvas(el,{scale:2});
-    const img=canvas.toDataURL("image/png");
-    const {jsPDF}=window.jspdf;
-    const pdf=new jsPDF({orientation:"portrait",unit:"pt",format:"a4"});
-    const pageWidth=pdf.internal.pageSize.getWidth();
-    const imgWidth=pageWidth-40;
-    const imgHeight=(canvas.height*imgWidth)/canvas.width;
-    pdf.addImage(img,"PNG",20,20,imgWidth,imgHeight);
+    const el = document.getElementById("printArea");
+    const canvas = await html2canvas(el,{scale:2});
+    const img = canvas.toDataURL("image/png");
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({orientation:"portrait",unit:"pt",format:"a4"});
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const imgWidth = pageWidth - 40;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    pdf.addImage(img, "PNG", 20, 20, imgWidth, imgHeight);
     pdf.save(`folha_ponto_${yearSelect.value}_${pad(+monthSelect.value+1)}.pdf`);
   }
 
-  document.getElementById("btnFill").addEventListener("click",()=>{
-    gerarTabela(+monthSelect.value,+yearSelect.value);
+  document.getElementById("btnFill").addEventListener("click", () => {
+    gerarTabela(+monthSelect.value, +yearSelect.value);
   });
-  document.getElementById("btnPDF").addEventListener("click",gerarPDF);
 
-  gerarTabela(now.getMonth(),now.getFullYear());
+  document.getElementById("btnPDF").addEventListener("click", gerarPDF);
+
+  gerarTabela(now.getMonth(), now.getFullYear());
 </script>
+
 </body>
 </html>
