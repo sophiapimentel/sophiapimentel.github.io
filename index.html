@@ -18,14 +18,16 @@
     .header .title { font-weight:700; margin-bottom:6px; border-bottom: 1px solid #000; padding-bottom:6px; }
     .header-box { display:flex; justify-content:space-between; gap:12px; padding-bottom:20px }
     .header-left { font-size:13px; }
+    .header-left strong { width:80px; display:inline-block; }
     .meta div { margin:2px 0; }
-    .header-right { text-align:right; font-size:13px; }
+    .header-right { text-align:left; font-size:13px; }
+    .header-right strong { width:75px; display:inline-block; }
     caption { caption-side:top; text-align:left; padding-bottom:6px; font-weight:600; font-size:13px;}
     #pontoTableDiv { overflow-x:auto }
     table { width:100%; border-collapse:collapse; font-size:13px; }
     th, td { border:1px solid #000; padding:6px 8px; text-align:center; vertical-align:middle; }
     th { background:#efefef; font-weight:700; }
-    .col-day { width:92px; text-align:left; padding-left:8px; }
+    .col-day { width:30px; }
     .col-sign { width:200px; text-align:left; padding-left:10px; }
     .weekend { background:#fafafa; color:#999; }
     .notes { margin-top:10px; font-size:12px; color:#555; }
@@ -45,7 +47,7 @@
     <button id="btnFill">Gerar</button>
     <button id="btnPDF">Gerar PDF</button>
 
-    <div class="small" style="margin-left:auto;">Horário base: 08:00–12:00 e 13:00–17:48 (mínimo diário 8h48). Tolerância ±3 minutos.</div>
+    <div class="small" style="margin-left:auto;">Horário base: 08:00–12:00 e 13:00–17:48 (CH diária 8h48)</div>
   </div>
 
   <div id="printArea" class="sheet" role="region" aria-label="Folha de ponto">
@@ -78,14 +80,17 @@
         <!-- <caption id="table-desc">Horário normal: Segunda à Sexta 08:00 às 12:00 e 13:00 às 17:48 — mínimo diário: 8h48 (528 min). Tolerância por marcação: ±3 minutos.</caption> -->
         <thead>
           <tr>
-            <th class="col-day">Dias</th>
+            <th rowspan="2" colspan="2">Dias</th>
+            <th rowspan="1" colspan="4">Normal</th>
+            <th rowspan="1" colspan="2">Extra</th>
+            <th rowspan="2" colspan="1">Assinatura ou observações</th>
+          </tr>
+          <tr>
             <th>Entrada</th>
+            <th colspan="2">Intervalo</th>
             <th>Saída</th>
-            <th>Entrada</th>
-            <th>Saída</th>
-            <th>Extra Início</th>
-            <th>Extra Término</th>
-            <th class="col-sign">Assinatura / observações</th>
+            <th>Início</th>
+            <th>Término</th>
           </tr>
         </thead>
         <tbody></tbody>
@@ -166,10 +171,16 @@
       const dt=new Date(ano,mes,d);
       const dow=dt.getDay();
       const tr=document.createElement("tr");
-      const dia=String(pad(d))+" "+["Dom","Seg","Ter","Qua","Qui","Sex","Sab"][dow];
+      const dia=String(pad(d));
+      const diaName=["Dom","Seg","Ter","Qua","Qui","Sex","Sab"][dow];
       const tdDia=document.createElement("td");
-      tdDia.textContent=dia; tdDia.className="col-day";
+      const tdDiaName=document.createElement("td");
+      tdDia.textContent=dia;
+      tdDia.className="col-day";
+      tdDiaName.textContent=diaName;
+      tdDiaName.className="col-day";
       tr.appendChild(tdDia);
+      tr.appendChild(tdDiaName);
 
       if(dow===0 || dow===6){
         tr.classList.add("weekend");
@@ -186,13 +197,14 @@
         tr.appendChild(document.createElement("td"));
         tr.appendChild(document.createElement("td"));
         const tdObs=document.createElement("td");
-        tdObs.className="col-sign"; tdObs.textContent="Sophia P. Rodrigues";
+        // tdObs.className="col-sign";
+        tdObs.textContent="";
         tr.appendChild(tdObs);
       }
       tbody.appendChild(tr);
     }
     document.getElementById("periodLabel").textContent=`01/${pad(mes+1)}/${ano} a ${pad(dias)}/${pad(mes+1)}/${ano}`;
-    document.getElementById("generatedDate").textContent=new Date().toLocaleDateString("pt-BR");
+    document.getElementById("generatedDate").textContent= `${pad(dias)}/${pad(mes+1)}/${ano}`;
   }
 
   async function gerarPDF(){
